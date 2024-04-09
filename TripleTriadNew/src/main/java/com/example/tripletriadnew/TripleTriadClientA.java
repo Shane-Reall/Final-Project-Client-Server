@@ -8,7 +8,9 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TextArea;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.GridPane;
@@ -22,7 +24,7 @@ import javafx.stage.Stage;
 import java.io.*;
 import java.net.Socket;
 
-public class TripleTriad extends Application {
+public class TripleTriadClientA extends Application {
 
     Socket socket;
     CardClass[] playerCards = new CardClass[5];

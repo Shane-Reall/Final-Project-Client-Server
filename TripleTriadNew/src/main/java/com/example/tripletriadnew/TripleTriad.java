@@ -26,13 +26,17 @@ public class TripleTriad extends Application {
 
     Socket socket;
     CardClass[] playerCards = new CardClass[5];
+    CardClass[] enemyCards = new CardClass[5];
     Color currentColor = Color.BLUE;
     ImageView selectedTile = null;
     CardClass selectedCard = null;
     Rectangle[][] boardGrid = new Rectangle[3][3];
     CardClass[][] boardStatus = new CardClass[3][3];
+    int enemyCardCount = 0;
     GridPane enemy = new GridPane();
     GridPane player = new GridPane();
+    ObjectOutputStream objectOutputStream;
+    ObjectInputStream objectInputStream;
     Scene menuScene;
     Scene gameScene;
     Scene cardScene;
@@ -46,14 +50,21 @@ public class TripleTriad extends Application {
             primaryStage.setScene(gameScene);
             try {
                 socket = new Socket("localhost", 5555);
-                ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-                ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream());
+                objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+                objectInputStream = new ObjectInputStream(socket.getInputStream());
+                objectOutputStream.writeObject("Ready");
+                objectOutputStream.flush();
+
+                // Wait for the server's readiness signal
+                String serverResponse = (String) objectInputStream.readObject();
+                while (!serverResponse.equals("Ready")) {
+                    serverResponse = (String) objectInputStream.readObject();
+                    Thread.sleep(5000);
+                }
                 for (int i = 1; i <= 5; i++) {
                     File file = new File("hand/" + i + ".ser");
 
                     if (file.exists()) {
-                        System.out.println("Sending file: " + file.getName());
-
                         // Read file content into a byte array
                         byte[] fileBytes = readFileToBytes(file);
 
@@ -61,13 +72,22 @@ public class TripleTriad extends Application {
                         objectOutputStream.writeObject(fileBytes);
                         objectOutputStream.flush();
 
-                        System.out.println("File sent successfully.");
+                        System.out.println("Sent" + i);
                     } else {
                         System.out.println("File not found: " + file.getName());
+                        System.exit(1205);
                     }
                 }
+                Object enemyCards = objectInputStream.readObject();
+                FileOutputStream fileOutputStream;
 
-            } catch (IOException ex) {
+                byte[] fileBytes = (byte[]) enemyCards;
+                String fileName = (++enemyCardCount) + ".ser";
+                fileOutputStream = new FileOutputStream("enemy/" + fileName);
+
+                fileOutputStream.write(fileBytes);
+                fileOutputStream.close();
+            } catch (Exception ex) {
                 throw new RuntimeException(ex);
             }
         });
@@ -293,6 +313,18 @@ public class TripleTriad extends Application {
             selectedTile = null;
             selectedCard = null;
             boardUpdate(x,y);
+
+            try {
+                // Read file content into a byte array
+                CardClass[][] boardServerUpdate = boardStatus;
+
+                // Send the byte array to the server
+                objectOutputStream.writeObject(boardServerUpdate);
+                objectOutputStream.flush();
+            } catch (Exception e) {
+                System.out.println(e);
+                System.exit(1205);
+            }
         }
     }
 

@@ -62,10 +62,9 @@ public class TripleTriadClientA extends Application {
                         // Send the byte array to the server
                         objectOutputStream.writeObject(fileBytes);
                         objectOutputStream.flush();
-
-                        System.out.println("File sent successfully.");
                     } else {
                         System.out.println("File not found: " + file.getName());
+                        System.exit(1205);
                     }
                 }
 

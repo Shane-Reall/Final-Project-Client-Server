@@ -13,12 +13,28 @@ public class TripleTriadServer {
         ServerSocket serverSocket = new ServerSocket(PORT);
         System.out.println("Server Started. Waiting for clients...");
 
+        ObjectInputStream playerOneInput = null;
+        ObjectOutputStream playerOneOutput = null;
+        ObjectInputStream playerTwoInput = null;
+        ObjectOutputStream playerTwoOutput = null;
+
         while (clientCount < 2) {
             Socket clientSocket = serverSocket.accept();
             System.out.println("Client connected: " + clientSocket.getInetAddress());
 
+            ObjectInputStream input = new ObjectInputStream(clientSocket.getInputStream());
+            ObjectOutputStream output = new ObjectOutputStream(clientSocket.getOutputStream());
+
+            if (clientCount == 0) {
+                playerOneInput = input;
+                playerOneOutput = output;
+            } else {
+                playerTwoInput = input;
+                playerTwoOutput = output;
+            }
+
             // Start a new thread to handle the client connection
-            ClientHandler handler = new ClientHandler(clientSocket);
+            ClientHandler handler = new ClientHandler(clientSocket, playerOneInput, playerOneOutput, playerTwoInput, playerTwoOutput, input, output);
             handler.start();
             clientCount++;
         }
@@ -32,20 +48,28 @@ class ClientHandler extends Thread {
     private Socket clientSocket;
     private ObjectInputStream input;
     private ObjectOutputStream output;
+    private ObjectInputStream playerOneInput;
+    private ObjectInputStream playerTwoInput;
+    private ObjectOutputStream playerOneOutput;
+    private ObjectOutputStream playerTwoOutput;
+    private final Object filesSentLock = new Object();
     private int clientId;
     private int fileCounter;
+    private static boolean filesSent = false;
     private CardClass[][] boardStatus = new CardClass[3][3];
 
-    public ClientHandler(Socket socket) {
+    public ClientHandler(Socket socket, ObjectInputStream playerOneInput, ObjectOutputStream playerOneOutput, ObjectInputStream playerTwoInput, ObjectOutputStream playerTwoOutput, ObjectInputStream input, ObjectOutputStream output) {
         this.clientSocket = socket;
         this.clientId = ++clientCount; // Assign a unique ID to each client
         this.fileCounter = 0;
-        try {
-            input = new ObjectInputStream(clientSocket.getInputStream());
-            output = new ObjectOutputStream(clientSocket.getOutputStream());
-        } catch (IOException ioEx) {
-            ioEx.printStackTrace();
-        }
+
+        this.playerOneInput = playerOneInput;
+        this.playerOneOutput = playerOneOutput;
+        this.playerTwoInput = playerTwoInput;
+        this.playerTwoOutput = playerTwoOutput;
+
+        this.input = input;
+        this.output = output;
     }
 
     @Override
@@ -56,9 +80,12 @@ class ClientHandler extends Thread {
 
                 if (received instanceof String && received.equals("Ready")) {
                     if (clientCount == 2) {
-                        // Both clients are ready; send a readiness signal back to each client
-                        output.writeObject("Ready");
-                        output.flush();
+
+                        playerOneOutput.writeObject("Ready");
+                        playerOneOutput.flush();
+
+                        playerTwoOutput.writeObject("Ready");
+                        playerTwoOutput.flush();
 
                         System.out.println("Sent");
                     }
@@ -76,15 +103,18 @@ class ClientHandler extends Thread {
                     }
                     fileOutputStream.write(receivedBytes);
                     fileOutputStream.close();
-
-                    if (clientCount == 2) {
-                        sendFilesBack();
-                    }
                 } else if (received instanceof CardClass[][]) {
                     Object[][] receivedArray = (Object[][]) received;
                     boardStatus = (CardClass[][]) receivedArray;
                     System.out.println("Received array of " + receivedArray.length + " objects.");
                     System.out.println(Arrays.deepToString(boardStatus));
+                } else if (received instanceof String && received.equals("Flip")) {
+                    synchronized (ClientHandler.class) {
+                        if (!filesSent) {
+                            filesSent = true;
+                            sendFilesBack();
+                        }
+                    }
                 }
             }
         } catch (IOException | ClassNotFoundException e) {
@@ -102,38 +132,44 @@ class ClientHandler extends Thread {
     }
 
     private void sendFilesBack() {
+        System.out.println("Cactus");
         try {
-            for (int i = 0; i < 5; i++) {
+            // Sending files from PlayerOne to PlayerTwo
+            for (int i = 0; i <= 5; i++) {
                 File playerOneFile = new File("PlayerOne/" + i + ".ser");
                 if (playerOneFile.exists()) {
                     FileInputStream playerOneInputStream = new FileInputStream(playerOneFile);
                     byte[] playerOneBytes = playerOneInputStream.readAllBytes();
                     playerOneInputStream.close();
 
-                    FileOutputStream playerTwoOutputStream = new FileOutputStream("PlayerOne/" + i + ".ser");
+                    FileOutputStream playerTwoOutputStream = new FileOutputStream("PlayerTwo/" + i + ".ser");
                     playerTwoOutputStream.write(playerOneBytes);
+                    playerTwoOutputStream.flush();
                     playerTwoOutputStream.close();
 
-                    System.out.println("File sent back to PlayerTwo");
+                    System.out.println("File " + i + ".ser sent from PlayerOne to PlayerTwo");
                 }
             }
 
-            for (int i = 0; i < 5; i++) {
+            // Sending files from PlayerTwo to PlayerOne
+            for (int i = 0; i <= 5; i++) {
                 File playerTwoFile = new File("PlayerTwo/" + i + ".ser");
                 if (playerTwoFile.exists()) {
                     FileInputStream playerTwoInputStream = new FileInputStream(playerTwoFile);
                     byte[] playerTwoBytes = playerTwoInputStream.readAllBytes();
                     playerTwoInputStream.close();
 
-                    FileOutputStream playerOneOutputStream = new FileOutputStream("PlayerTwo/" + i + ".ser");
+                    FileOutputStream playerOneOutputStream = new FileOutputStream("PlayerOne/" + i + ".ser");
                     playerOneOutputStream.write(playerTwoBytes);
+                    playerOneOutputStream.flush();
                     playerOneOutputStream.close();
 
-                    System.out.println("File sent back to PlayerOne");
+                    System.out.println("File " + i + ".ser sent from PlayerTwo to PlayerOne");
                 }
             }
-        } catch (Exception e) {
-            System.exit(1205);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
+
 }

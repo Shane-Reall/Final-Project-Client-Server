@@ -8,7 +8,9 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TextArea;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.GridPane;
@@ -22,21 +24,17 @@ import javafx.stage.Stage;
 import java.io.*;
 import java.net.Socket;
 
-public class TripleTriad extends Application {
+public class TripleTriadClientA extends Application {
 
     Socket socket;
     CardClass[] playerCards = new CardClass[5];
-    CardClass[] enemyCards = new CardClass[5];
     Color currentColor = Color.BLUE;
     ImageView selectedTile = null;
     CardClass selectedCard = null;
     Rectangle[][] boardGrid = new Rectangle[3][3];
     CardClass[][] boardStatus = new CardClass[3][3];
-    int enemyCardCount = 0;
     GridPane enemy = new GridPane();
     GridPane player = new GridPane();
-    ObjectOutputStream objectOutputStream;
-    ObjectInputStream objectInputStream;
     Scene menuScene;
     Scene gameScene;
     Scene cardScene;
@@ -50,48 +48,27 @@ public class TripleTriad extends Application {
             primaryStage.setScene(gameScene);
             try {
                 socket = new Socket("localhost", 5555);
-                objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-                objectInputStream = new ObjectInputStream(socket.getInputStream());
-                objectOutputStream.writeObject("Ready");
-                objectOutputStream.flush();
-
-                // Wait for the server's readiness signal
-                String serverResponse = (String) objectInputStream.readObject();
-                while (!serverResponse.equals("Ready")) {
-                    serverResponse = (String) objectInputStream.readObject();
-                    Thread.sleep(5000);
-                }
+                ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+                ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream());
                 for (int i = 1; i <= 5; i++) {
                     File file = new File("hand/" + i + ".ser");
 
                     if (file.exists()) {
+                        System.out.println("Sending file: " + file.getName());
+
                         // Read file content into a byte array
                         byte[] fileBytes = readFileToBytes(file);
 
                         // Send the byte array to the server
                         objectOutputStream.writeObject(fileBytes);
                         objectOutputStream.flush();
-
-                        System.out.println("Sent" + i);
                     } else {
                         System.out.println("File not found: " + file.getName());
                         System.exit(1205);
                     }
                 }
 
-                objectOutputStream.writeObject("Flip");
-                objectOutputStream.flush();
-
-                Object enemyCards = objectInputStream.readObject();
-                byte[] fileBytes = (byte[]) enemyCards;
-                String fileName = (++enemyCardCount) + ".ser";
-
-                FileOutputStream fileOutputStream = new FileOutputStream("enemy/" + fileName);
-                fileOutputStream.write(fileBytes);
-                fileOutputStream.close();
-
-                System.out.println("Received and saved file: " + fileName);
-            } catch (Exception ex) {
+            } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
         });
@@ -317,18 +294,6 @@ public class TripleTriad extends Application {
             selectedTile = null;
             selectedCard = null;
             boardUpdate(x,y);
-
-            try {
-                // Read file content into a byte array
-                CardClass[][] boardServerUpdate = boardStatus;
-
-                // Send the byte array to the server
-                objectOutputStream.writeObject(boardServerUpdate);
-                objectOutputStream.flush();
-            } catch (Exception e) {
-                System.out.println(e);
-                System.exit(1205);
-            }
         }
     }
 

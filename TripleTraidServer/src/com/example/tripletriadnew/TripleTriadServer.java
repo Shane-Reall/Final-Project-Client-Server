@@ -51,18 +51,16 @@ public class TripleTriadServer {
 class ClientHandler extends Thread {
     private static int clientCount = 0;
     private Socket clientSocket;
-    private Socket playerOneSocket;
-    private Socket playerTwoSocket;
+    private final Socket playerOneSocket;
+    private final Socket playerTwoSocket;
     private ObjectInputStream input;
     private ObjectOutputStream output;
     private ObjectInputStream playerOneInput;
     private ObjectInputStream playerTwoInput;
     private ObjectOutputStream playerOneOutput;
     private ObjectOutputStream playerTwoOutput;
-    private final Object filesSentLock = new Object();
     private int clientId;
     private int fileCounter;
-    private static boolean filesSent = false;
     private CardClass[][] boardStatus = new CardClass[3][3];
 
     public ClientHandler(Socket socket, ObjectInputStream playerOneInput, ObjectOutputStream playerOneOutput, ObjectInputStream playerTwoInput, ObjectOutputStream playerTwoOutput, ObjectInputStream input, ObjectOutputStream output, Socket playerOneSocket, Socket playerTwoSocket) {
@@ -104,7 +102,7 @@ class ClientHandler extends Thread {
                     FileOutputStream fileOutputStream;
                     byte[] receivedBytes = (byte[]) received;
                     String fileName = (++fileCounter) + ".ser";
-                    if (clientCount == 1) {
+                    if (clientId == 1) {
                         fileOutputStream = new FileOutputStream("PlayerOne/" + fileName);
                     }
                     else {
@@ -117,12 +115,9 @@ class ClientHandler extends Thread {
                     boardStatus = (CardClass[][]) receivedArray;
                     System.out.println("Received array of " + receivedArray.length + " objects.");
                     System.out.println(Arrays.deepToString(boardStatus));
-                } else if (received instanceof String && received.equals("Flip")) {
+                } else if (received instanceof String && received.equals("Flip") && clientId == 2) {
                     synchronized (ClientHandler.class) {
-                        if (!filesSent) {
-                            filesSent = true;
-                            sendFilesBack(playerOneSocket, playerTwoSocket);
-                        }
+                        sendFilesBack(playerOneSocket, playerTwoSocket);
                     }
                 }
             }
@@ -153,6 +148,8 @@ class ClientHandler extends Thread {
                 out.write(fileData);
                 out.flush();
 
+                Thread.sleep(500);
+
                 fileInputStream.close();
 
                 System.out.println("Sent " + fileName);
@@ -168,11 +165,13 @@ class ClientHandler extends Thread {
                 out.write(fileData);
                 out.flush();
 
+                Thread.sleep(500);
+
                 fileInputStream.close();
 
                 System.out.println("Sent " + fileName);
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }

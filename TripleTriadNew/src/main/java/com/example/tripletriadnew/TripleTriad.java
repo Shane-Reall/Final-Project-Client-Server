@@ -21,6 +21,7 @@ import javafx.stage.Stage;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.Arrays;
 
 public class TripleTriad extends Application {
 
@@ -48,52 +49,7 @@ public class TripleTriad extends Application {
         Button startButton = new Button("Start Game");
         startButton.setOnAction(e -> {
             primaryStage.setScene(gameScene);
-            try {
-                socket = new Socket("localhost", 5555);
-                objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-                objectInputStream = new ObjectInputStream(socket.getInputStream());
-                objectOutputStream.writeObject("Ready");
-                objectOutputStream.flush();
-
-                // Wait for the server's readiness signal
-                String serverResponse = (String) objectInputStream.readObject();
-                while (!serverResponse.equals("Ready")) {
-                    serverResponse = (String) objectInputStream.readObject();
-                    Thread.sleep(5000);
-                }
-                for (int i = 1; i <= 5; i++) {
-                    File file = new File("hand/" + i + ".ser");
-
-                    if (file.exists()) {
-                        // Read file content into a byte array
-                        byte[] fileBytes = readFileToBytes(file);
-
-                        // Send the byte array to the server
-                        objectOutputStream.writeObject(fileBytes);
-                        objectOutputStream.flush();
-
-                        System.out.println("Sent" + i);
-                    } else {
-                        System.out.println("File not found: " + file.getName());
-                        System.exit(1205);
-                    }
-                }
-
-                objectOutputStream.writeObject("Flip");
-                objectOutputStream.flush();
-
-                Object enemyCards = objectInputStream.readObject();
-                byte[] fileBytes = (byte[]) enemyCards;
-                String fileName = (++enemyCardCount) + ".ser";
-
-                FileOutputStream fileOutputStream = new FileOutputStream("enemy/" + fileName);
-                fileOutputStream.write(fileBytes);
-                fileOutputStream.close();
-
-                System.out.println("Received and saved file: " + fileName);
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
-            }
+            serverSetup();
         });
         Button cardButton = new Button("Cards");
         cardButton.setOnAction(e -> primaryStage.setScene(cardScene));
@@ -110,6 +66,76 @@ public class TripleTriad extends Application {
         primaryStage.setTitle("Triple Triad");
         primaryStage.setScene(menuScene);
         primaryStage.show();
+    }
+
+    private void serverSetup() {
+        try {
+            socket = new Socket("localhost", 5555);
+            objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+            objectInputStream = new ObjectInputStream(socket.getInputStream());
+            objectOutputStream.writeObject("Ready");
+            objectOutputStream.flush();
+
+            // Wait for the server's readiness signal
+            String serverResponse = (String) objectInputStream.readObject();
+            while (!serverResponse.equals("Ready")) {
+                serverResponse = (String) objectInputStream.readObject();
+                Thread.sleep(5000);
+            }
+            for (int i = 1; i <= 5; i++) {
+                File file = new File("hand/" + i + ".ser");
+
+                if (file.exists()) {
+                    // Read file content into a byte array
+                    byte[] fileBytes = readFileToBytes(file);
+
+                    // Send the byte array to the server
+                    objectOutputStream.writeObject(fileBytes);
+                    objectOutputStream.flush();
+
+                    System.out.println("Sent" + i);
+                } else {
+                    System.out.println("File not found: " + file.getName());
+                    System.exit(1205);
+                }
+            }
+
+            objectOutputStream.writeObject("Flip");
+            objectOutputStream.flush();
+
+            for (int i = 1; i <= 5; i++) {
+                getEnemyFiles("enemy/" + i + ".ser");
+
+                System.out.println(i);
+
+                String filePath = "enemy/" + (i) + ".ser";
+                FileInputStream fis = new FileInputStream(filePath);
+                ObjectInputStream ois = new ObjectInputStream(fis);
+                CardClass deserialized = (CardClass) ois.readObject();
+                ois.close();
+                fis.close();
+
+                enemyCards[i] = deserialized;
+            }
+
+            System.out.println(Arrays.toString(enemyCards));
+
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private void getEnemyFiles(String filePath) throws Exception {
+        byte[] fileBytes = new byte[1024];
+        InputStream inputStream = socket.getInputStream();
+        FileOutputStream fileOutputStream = new FileOutputStream(filePath);
+
+        int bytesRead;
+        while ((bytesRead = inputStream.read(fileBytes)) != -1) {
+            fileOutputStream.write(fileBytes, 0, bytesRead);
+        }
+
+        fileOutputStream.close();
     }
 
     private static byte[] readFileToBytes(File file) throws IOException {

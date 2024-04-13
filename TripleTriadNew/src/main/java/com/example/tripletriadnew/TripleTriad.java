@@ -41,6 +41,7 @@ public class TripleTriad extends Application {
     Scene menuScene;
     Scene gameScene;
     Scene cardScene;
+    Boolean currentTurn = false;
 
     @Override
     public void start(Stage primaryStage) throws Exception {
@@ -126,6 +127,9 @@ public class TripleTriad extends Application {
             deserialized(i-1, filePath, enemyCards);
             i++;
             filePath = "enemy/" + i + ".ser";
+            if (i >= 6) {
+                break;
+            }
         }
     }
 
@@ -163,7 +167,6 @@ public class TripleTriad extends Application {
         buttonLayout.setAlignment(Pos.CENTER);
         cardLayout.setAlignment(Pos.CENTER);
         cardLayoutH.setAlignment(Pos.CENTER);
-
 
         ListView<String> availableNamesListView = new ListView<>();
         ListView<String> selectedNamesListView = new ListView<>();
@@ -325,6 +328,7 @@ public class TripleTriad extends Application {
     }
 
     private void handClick(ImageView tile, int i) {
+
         if (selectedTile != null) {
             selectedTile.setFitWidth(75);
             selectedTile.setFitHeight(75);
@@ -344,7 +348,7 @@ public class TripleTriad extends Application {
     }
 
     private void boardClick(ImageView imageView, int x, int y) {
-        if (selectedTile != null && boardStatus[x][y] == null) {
+        if (selectedTile != null && boardStatus[x][y] == null && currentTurn) {
             imageView.setImage(selectedTile.getImage());
             player.getChildren().remove(selectedTile);
             boardGrid[x][y].setFill(currentColor);

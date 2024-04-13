@@ -41,6 +41,7 @@ public class TripleTriad extends Application {
     Scene menuScene;
     Scene gameScene;
     Scene cardScene;
+    Boolean currentTurn = false;
 
     @Override
     public void start(Stage primaryStage) throws Exception {
@@ -103,20 +104,7 @@ public class TripleTriad extends Application {
             objectOutputStream.writeObject("Flip");
             objectOutputStream.flush();
 
-            for (int i = 1; i <= 5; i++) {
-                getEnemyFiles("enemy/" + i + ".ser");
-
-                System.out.println(i);
-
-                String filePath = "enemy/" + (i) + ".ser";
-                FileInputStream fis = new FileInputStream(filePath);
-                ObjectInputStream ois = new ObjectInputStream(fis);
-                CardClass deserialized = (CardClass) ois.readObject();
-                ois.close();
-                fis.close();
-
-                enemyCards[i] = deserialized;
-            }
+            getEnemyFiles("enemy/" + 1 + ".ser", 1);
 
             System.out.println(Arrays.toString(enemyCards));
 
@@ -125,17 +113,43 @@ public class TripleTriad extends Application {
         }
     }
 
-    private void getEnemyFiles(String filePath) throws Exception {
+    private void getEnemyFiles(String filePath, int i) throws Exception {
+        folderEmpty();
         byte[] fileBytes = new byte[1024];
         InputStream inputStream = socket.getInputStream();
-        FileOutputStream fileOutputStream = new FileOutputStream(filePath);
+        FileOutputStream fileOutputStream;
 
         int bytesRead;
         while ((bytesRead = inputStream.read(fileBytes)) != -1) {
+            fileOutputStream = new FileOutputStream(filePath);
             fileOutputStream.write(fileBytes, 0, bytesRead);
+            fileOutputStream.close();
+            deserialized(i-1, filePath, enemyCards);
+            i++;
+            filePath = "enemy/" + i + ".ser";
+            if (i >= 6) {
+                break;
+            }
         }
+    }
 
-        fileOutputStream.close();
+    private void folderEmpty() {
+        File folder = new File("enemy/");
+        File[] files = folder.listFiles();
+
+        if (files != null) {
+            for (File file : files) {
+                if (file.isFile()) {
+                    // Delete the file
+                    boolean deleted = file.delete();
+                    if (deleted) {
+                        System.out.println("Deleted file: " + file.getAbsolutePath());
+                    } else {
+                        System.out.println("Failed to delete file: " + file.getAbsolutePath());
+                    }
+                }
+            }
+        }
     }
 
     private static byte[] readFileToBytes(File file) throws IOException {
@@ -153,7 +167,6 @@ public class TripleTriad extends Application {
         buttonLayout.setAlignment(Pos.CENTER);
         cardLayout.setAlignment(Pos.CENTER);
         cardLayoutH.setAlignment(Pos.CENTER);
-
 
         ListView<String> availableNamesListView = new ListView<>();
         ListView<String> selectedNamesListView = new ListView<>();
@@ -216,7 +229,7 @@ public class TripleTriad extends Application {
         GridPane placeBoard = new GridPane();
 
         for (int i = 0; i < 5; i++) {
-            deserialized(i);
+            deserialized(i, "hand/" + (i+1) + ".ser", playerCards);
         }
 
         for (int row = 0; row < 3; row++) {
@@ -315,6 +328,7 @@ public class TripleTriad extends Application {
     }
 
     private void handClick(ImageView tile, int i) {
+
         if (selectedTile != null) {
             selectedTile.setFitWidth(75);
             selectedTile.setFitHeight(75);
@@ -334,7 +348,7 @@ public class TripleTriad extends Application {
     }
 
     private void boardClick(ImageView imageView, int x, int y) {
-        if (selectedTile != null && boardStatus[x][y] == null) {
+        if (selectedTile != null && boardStatus[x][y] == null && currentTurn) {
             imageView.setImage(selectedTile.getImage());
             player.getChildren().remove(selectedTile);
             boardGrid[x][y].setFill(currentColor);
@@ -367,15 +381,14 @@ public class TripleTriad extends Application {
         }
     }
 
-    private void deserialized(int i) throws Exception {
-        String filePath = "hand/" + (i+1) + ".ser";
+    private void deserialized(int i, String filePath, CardClass[] array) throws Exception {
         FileInputStream fis = new FileInputStream(filePath);
         ObjectInputStream ois = new ObjectInputStream(fis);
         CardClass deserialized = (CardClass) ois.readObject();
         ois.close();
         fis.close();
 
-        playerCards[i] = deserialized;
+        array[i] = deserialized;
     }
 
     private void boardUpdate(int x, int y) {

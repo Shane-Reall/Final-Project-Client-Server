@@ -113,8 +113,7 @@ class ClientHandler extends Thread {
                 } else if (received instanceof CardClass[][]) {
                     Object[][] receivedArray = (Object[][]) received;
                     boardStatus = (CardClass[][]) receivedArray;
-                    System.out.println("Received array of " + receivedArray.length + " objects.");
-                    System.out.println(Arrays.deepToString(boardStatus));
+                    switchCurrentPlayer();
                 } else if (received instanceof String && received.equals("Flip") && clientId == 2) {
                     synchronized (ClientHandler.class) {
                         sendFilesBack(playerOneSocket, playerTwoSocket);

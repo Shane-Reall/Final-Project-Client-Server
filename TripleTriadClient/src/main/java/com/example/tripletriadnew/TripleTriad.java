@@ -3,10 +3,12 @@ package com.example.tripletriadnew;
 //Cactus
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
@@ -25,26 +27,32 @@ import java.util.Arrays;
 
 public class TripleTriad extends Application {
 
+    Stage primaryStage;
     Socket socket;
     CardClass[] playerCards = new CardClass[5];
     CardClass[] enemyCards = new CardClass[5];
-    Color currentColor = Color.BLUE;
+    Color playerColor = Color.BLUE;
+    Color enemyColor = Color.RED;
     ImageView selectedTile = null;
     CardClass selectedCard = null;
+    GridPane board = new GridPane();
     Rectangle[][] boardGrid = new Rectangle[3][3];
     CardClass[][] boardStatus = new CardClass[3][3];
-    int enemyCardCount = 0;
     GridPane enemy = new GridPane();
     GridPane player = new GridPane();
     ObjectOutputStream objectOutputStream;
     ObjectInputStream objectInputStream;
+    Thread gameThread;
     Scene menuScene;
     Scene gameScene;
     Scene cardScene;
+    Boolean playState = true;
     Boolean currentTurn = false;
 
     @Override
     public void start(Stage primaryStage) throws Exception {
+        this.primaryStage = primaryStage;
+
         VBox menuLayout = new VBox(20);
         menuLayout.setAlignment(Pos.CENTER);
         Button startButton = new Button("Start Game");
@@ -93,8 +101,6 @@ public class TripleTriad extends Application {
                     // Send the byte array to the server
                     objectOutputStream.writeObject(fileBytes);
                     objectOutputStream.flush();
-
-                    System.out.println("Sent" + i);
                 } else {
                     System.out.println("File not found: " + file.getName());
                     System.exit(1205);
@@ -106,10 +112,113 @@ public class TripleTriad extends Application {
 
             getEnemyFiles("enemy/" + 1 + ".ser", 1);
 
-            System.out.println(Arrays.toString(enemyCards));
+            Object received = objectInputStream.readObject();
+
+            currentTurn = (Boolean) received;
+
+            System.out.println(currentTurn);
+
+            gameThread = new Thread(() -> {
+                try {
+                    while (playState) {
+                        Object receive = objectInputStream.readObject();
+
+                        if (receive instanceof CardClass[][]) {
+                            boardStatus = (CardClass[][]) receive;
+
+                            Platform.runLater(this::updateGameBoard);
+                        } else if (receive instanceof Boolean) {
+                            break;
+                        }
+                    }
+                    System.out.println("GameOver!");
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+            gameThread.start();
+
+
 
         } catch (Exception ex) {
             throw new RuntimeException(ex);
+        }
+    }
+
+    private void updateGameBoard() {
+        ObservableList<Node> boardChildren = board.getChildren();
+        for (Node node : boardChildren) {
+            if (node instanceof ImageView) {
+                ImageView imageView = (ImageView) node;
+                int col = GridPane.getRowIndex(node);
+                int row = GridPane.getColumnIndex(node);
+
+                if (row >= 0 && row < 3 && col >= 0 && col < 3) {
+                    CardClass card = boardStatus[row][col];
+
+                    if (card != null) {
+                        Image cardImage = new Image(card.getImage());
+                        imageView.setImage(cardImage);
+                    } else {
+                        imageView.setImage(new ImageView("file:WhiteSpace.png").getImage());
+                    }
+                }
+            }
+        }
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                if (boardGrid[i][j].getFill() == Color.WHITE && boardStatus[i][j] != null) {
+                    boardGrid[i][j].setFill(enemyColor);
+                    boardUpdate(i, j);
+                }
+            }
+        }
+        swapCurrentPlayer();
+        gameOverCheck();
+    }
+
+    private void gameOverCheck() {
+        int blue = 0;
+        int red = 0;
+        if (boardChecking()) {
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    if (boardGrid[i][j].getFill() == playerColor) {
+                        blue++;
+                    }
+                    else {
+                        red++;
+                    }
+                }
+            }
+            if (blue > red) {
+                System.out.println("You Win!");
+            }
+            else {
+                System.out.println("You Lose!");
+            }
+
+            primaryStage.setScene(menuScene);
+        }
+    }
+
+    private boolean boardChecking() {
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                if (boardStatus[i][j] == null) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private void swapCurrentPlayer() {
+        if (currentTurn) {
+            currentTurn = false;
+        }
+        else {
+            currentTurn = true;
         }
     }
 
@@ -140,13 +249,7 @@ public class TripleTriad extends Application {
         if (files != null) {
             for (File file : files) {
                 if (file.isFile()) {
-                    // Delete the file
                     boolean deleted = file.delete();
-                    if (deleted) {
-                        System.out.println("Deleted file: " + file.getAbsolutePath());
-                    } else {
-                        System.out.println("Failed to delete file: " + file.getAbsolutePath());
-                    }
                 }
             }
         }
@@ -225,7 +328,6 @@ public class TripleTriad extends Application {
     }
 
     private void playScreenCreation() throws Exception {
-        GridPane board = new GridPane();
         GridPane placeBoard = new GridPane();
 
         for (int i = 0; i < 5; i++) {
@@ -351,9 +453,8 @@ public class TripleTriad extends Application {
         if (selectedTile != null && boardStatus[x][y] == null && currentTurn) {
             imageView.setImage(selectedTile.getImage());
             player.getChildren().remove(selectedTile);
-            boardGrid[x][y].setFill(currentColor);
+            boardGrid[x][y].setFill(playerColor);
             boardStatus[x][y] = selectedCard;
-            colorSwap();
             selectedTile = null;
             selectedCard = null;
             boardUpdate(x,y);
@@ -372,15 +473,6 @@ public class TripleTriad extends Application {
         }
     }
 
-    private void colorSwap() {
-        if (currentColor == Color.BLUE) {
-            currentColor = Color.RED;
-        }
-        else {
-            currentColor = Color.BLUE;
-        }
-    }
-
     private void deserialized(int i, String filePath, CardClass[] array) throws Exception {
         FileInputStream fis = new FileInputStream(filePath);
         ObjectInputStream ois = new ObjectInputStream(fis);
@@ -392,6 +484,7 @@ public class TripleTriad extends Application {
     }
 
     private void boardUpdate(int x, int y) {
+
         CardClass[] checkingLocations = new CardClass[4];
 
         try {

@@ -1,8 +1,10 @@
 package com.example.tripletriadnew;
 
+import java.awt.*;
 import java.io.*;
 import java.net.*;
 import java.util.Arrays;
+import java.util.Random;
 
 public class TripleTriadServer {
 
@@ -13,36 +15,52 @@ public class TripleTriadServer {
         ServerSocket serverSocket = new ServerSocket(PORT);
         System.out.println("Server Started. Waiting for clients...");
 
+        Socket clientSocketOne = null;
+        ObjectInputStream inputOne = null;
+        ObjectOutputStream outputOne = null;
         ObjectInputStream playerOneInput = null;
         ObjectOutputStream playerOneOutput = null;
+        Socket clientSocketTwo = null;
+        ObjectInputStream inputTwo = null;
+        ObjectOutputStream outputTwo = null;
         ObjectInputStream playerTwoInput = null;
         ObjectOutputStream playerTwoOutput = null;
         Socket playerOneSocket = null;
         Socket playerTwoSocket = null;
 
         while (clientCount < 2) {
-            Socket clientSocket = serverSocket.accept();
-            System.out.println("Client connected: " + clientSocket.getInetAddress());
-
-            ObjectInputStream input = new ObjectInputStream(clientSocket.getInputStream());
-            ObjectOutputStream output = new ObjectOutputStream(clientSocket.getOutputStream());
 
             if (clientCount == 0) {
-                playerOneInput = input;
-                playerOneOutput = output;
-                playerOneSocket = clientSocket;
+                clientSocketOne = serverSocket.accept();
+                System.out.println("Client connected: " + clientSocketOne.getInetAddress());
+
+                inputOne = new ObjectInputStream(clientSocketOne.getInputStream());
+                outputOne = new ObjectOutputStream(clientSocketOne.getOutputStream());
+
+                playerOneInput = inputOne;
+                playerOneOutput = outputOne;
+                playerOneSocket = clientSocketOne;
 
             } else {
-                playerTwoInput = input;
-                playerTwoOutput = output;
-                playerTwoSocket = clientSocket;
+                clientSocketTwo = serverSocket.accept();
+                System.out.println("Client connected: " + clientSocketTwo.getInetAddress());
+
+                inputTwo = new ObjectInputStream(clientSocketTwo.getInputStream());
+                outputTwo = new ObjectOutputStream(clientSocketTwo.getOutputStream());
+
+                playerTwoInput = inputTwo;
+                playerTwoOutput = outputTwo;
+                playerTwoSocket = clientSocketTwo;
             }
 
-            // Start a new thread to handle the client connection
-            ClientHandler handler = new ClientHandler(clientSocket, playerOneInput, playerOneOutput, playerTwoInput, playerTwoOutput, input, output, playerOneSocket, playerTwoSocket);
-            handler.start();
             clientCount++;
         }
+
+        ClientHandler handlerOne = new ClientHandler(clientSocketOne, playerOneInput, playerOneOutput, playerTwoInput, playerTwoOutput, inputOne, outputOne, playerOneSocket, playerTwoSocket);
+        handlerOne.start();
+
+        ClientHandler handlerTwo = new ClientHandler(clientSocketTwo, playerOneInput, playerOneOutput, playerTwoInput, playerTwoOutput, inputTwo, outputTwo, playerOneSocket, playerTwoSocket);
+        handlerTwo.start();
 
         System.out.println("Max Number of Clients Reached");
     }
@@ -51,6 +69,7 @@ public class TripleTriadServer {
 class ClientHandler extends Thread {
     private static int clientCount = 0;
     private Socket clientSocket;
+    private final Object lock = new Object();
     private final Socket playerOneSocket;
     private final Socket playerTwoSocket;
     private ObjectInputStream input;
@@ -86,19 +105,16 @@ class ClientHandler extends Thread {
                 Object received = input.readObject();
 
                 if (received instanceof String && received.equals("Ready")) {
-                    if (clientCount == 2) {
+                    if (clientId == 1) {
 
                         playerOneOutput.writeObject("Ready");
                         playerOneOutput.flush();
 
                         playerTwoOutput.writeObject("Ready");
                         playerTwoOutput.flush();
-
-                        System.out.println("Sent");
                     }
                 }
                 else if (received instanceof byte[]) {
-                    // Handle file transfer
                     FileOutputStream fileOutputStream;
                     byte[] receivedBytes = (byte[]) received;
                     String fileName = (++fileCounter) + ".ser";
@@ -113,10 +129,24 @@ class ClientHandler extends Thread {
                 } else if (received instanceof CardClass[][]) {
                     Object[][] receivedArray = (Object[][]) received;
                     boardStatus = (CardClass[][]) receivedArray;
-                    switchCurrentPlayer();
+
+                    playerOneOutput.writeObject(boardStatus);
+                    playerOneOutput.flush();
+
+                    playerTwoOutput.writeObject(boardStatus);
+                    playerTwoOutput.flush();
+
+                    if (boardChecking()) {
+                        playerOneOutput.writeObject(false);
+                        playerOneOutput.flush();
+
+                        playerTwoOutput.writeObject(false);
+                        playerTwoOutput.flush();
+                    }
                 } else if (received instanceof String && received.equals("Flip") && clientId == 2) {
                     synchronized (ClientHandler.class) {
                         sendFilesBack(playerOneSocket, playerTwoSocket);
+                        currentPlayer();
                     }
                 }
             }
@@ -130,6 +160,30 @@ class ClientHandler extends Thread {
                 }
             } catch (IOException e) {
                 e.printStackTrace();
+            }
+        }
+    }
+
+    private void currentPlayer() {
+        synchronized (lock) {
+            Random rand = new Random();
+            int coinFlip = rand.nextInt(0,2);
+
+            try {
+                if (coinFlip == 0) {
+                    playerOneOutput.writeObject(true);
+                    playerOneOutput.flush();
+                    playerTwoOutput.writeObject(false);
+                    playerTwoOutput.flush();
+                }
+                else {
+                    playerTwoOutput.writeObject(true);
+                    playerTwoOutput.flush();
+                    playerOneOutput.writeObject(false);
+                    playerOneOutput.flush();
+                }
+            } catch (Exception e) {
+                System.out.println(e);
             }
         }
     }
@@ -150,8 +204,6 @@ class ClientHandler extends Thread {
                 Thread.sleep(500);
 
                 fileInputStream.close();
-
-                System.out.println("Sent " + fileName);
             }
 
             // Sending files from PlayerOne to PlayerTwo
@@ -167,12 +219,20 @@ class ClientHandler extends Thread {
                 Thread.sleep(500);
 
                 fileInputStream.close();
-
-                System.out.println("Sent " + fileName);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
+    private boolean boardChecking() {
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                if (boardStatus[i][j] == null) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 }

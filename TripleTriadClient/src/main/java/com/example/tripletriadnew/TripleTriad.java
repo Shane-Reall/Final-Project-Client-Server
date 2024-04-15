@@ -1,7 +1,5 @@
 package com.example.tripletriadnew;
 
-//Cactus
-
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -23,7 +21,6 @@ import javafx.stage.Stage;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.Arrays;
 
 public class TripleTriad extends Application {
 
@@ -38,6 +35,8 @@ public class TripleTriad extends Application {
     GridPane board = new GridPane();
     Rectangle[][] boardGrid = new Rectangle[3][3];
     CardClass[][] boardStatus = new CardClass[3][3];
+    GridPane arrowLeft = new GridPane();
+    GridPane arrowRight = new GridPane();
     GridPane enemy = new GridPane();
     GridPane player = new GridPane();
     ObjectOutputStream objectOutputStream;
@@ -46,8 +45,11 @@ public class TripleTriad extends Application {
     Scene menuScene;
     Scene gameScene;
     Scene cardScene;
+    Scene endScene;
+    Scene loadingScene;
     Boolean playState = true;
     Boolean currentTurn = false;
+    Boolean victory = false;
 
     @Override
     public void start(Stage primaryStage) throws Exception {
@@ -57,8 +59,15 @@ public class TripleTriad extends Application {
         menuLayout.setAlignment(Pos.CENTER);
         Button startButton = new Button("Start Game");
         startButton.setOnAction(e -> {
-            primaryStage.setScene(gameScene);
-            serverSetup();
+            primaryStage.setScene(loadingScene);
+            Platform.runLater(() -> {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ex) {
+                    throw new RuntimeException(ex);
+                }
+                serverSetup();
+            });
         });
         Button cardButton = new Button("Cards");
         cardButton.setOnAction(e -> primaryStage.setScene(cardScene));
@@ -71,21 +80,57 @@ public class TripleTriad extends Application {
 
         playScreenCreation();
         cardScreenCreation(primaryStage);
+        loadingSceneCreation();
 
         primaryStage.setTitle("Triple Triad");
         primaryStage.setScene(menuScene);
         primaryStage.show();
     }
 
+    private void loadingSceneCreation() {
+        VBox layout = new VBox(35);
+        layout.setAlignment(Pos.CENTER);
+        Label message = new Label("Setting up game, Please wait");
+        Image bufferWheel = new Image("file:spin.gif");
+
+        ImageView bufferView = new ImageView(bufferWheel);
+
+        layout.getChildren().add(message);
+        layout.getChildren().add(bufferView);
+        loadingScene = new Scene(layout, 300, 200);
+    }
+
+    private void endScreenCreation(Stage primaryStage) {
+        Label winLose;
+        Button menuButton = new Button("Close");
+        menuButton.setOnAction(e -> primaryStage.setScene(menuScene));
+        VBox layout = new VBox(25);
+        layout.setAlignment(Pos.CENTER);
+
+        if (victory) {
+            winLose = new Label("You Win!");
+        }
+        else {
+            winLose = new Label("You Lose!");
+        }
+
+        layout.getChildren().add(winLose);
+        layout.getChildren().add(menuButton);
+        endScene = new Scene(layout, 300, 200);
+    }
+
     private void serverSetup() {
         try {
+
+            //String serverIpAddressOrHostname = "xxx.xxx.x.xxx"; //Setup for connections through internet
+
             socket = new Socket("localhost", 5555);
+            //socket = new Socket(serverIpAddressOrHostname, 5555); //Setup for connections through internet
             objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
             objectInputStream = new ObjectInputStream(socket.getInputStream());
             objectOutputStream.writeObject("Ready");
             objectOutputStream.flush();
 
-            // Wait for the server's readiness signal
             String serverResponse = (String) objectInputStream.readObject();
             while (!serverResponse.equals("Ready")) {
                 serverResponse = (String) objectInputStream.readObject();
@@ -95,10 +140,8 @@ public class TripleTriad extends Application {
                 File file = new File("hand/" + i + ".ser");
 
                 if (file.exists()) {
-                    // Read file content into a byte array
                     byte[] fileBytes = readFileToBytes(file);
 
-                    // Send the byte array to the server
                     objectOutputStream.writeObject(fileBytes);
                     objectOutputStream.flush();
                 } else {
@@ -116,7 +159,11 @@ public class TripleTriad extends Application {
 
             currentTurn = (Boolean) received;
 
-            System.out.println(currentTurn);
+            if (currentTurn) {
+                arrowFlip();
+            }
+
+            primaryStage.setScene(gameScene);
 
             gameThread = new Thread(() -> {
                 try {
@@ -126,14 +173,15 @@ public class TripleTriad extends Application {
                         if (receive instanceof CardClass[][]) {
                             boardStatus = (CardClass[][]) receive;
 
+                            arrowFlip();
+
                             Platform.runLater(this::updateGameBoard);
                         } else if (receive instanceof Boolean) {
                             break;
                         }
                     }
-                    System.out.println("GameOver!");
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    System.exit(1205);
                 }
             });
             gameThread.start();
@@ -145,11 +193,21 @@ public class TripleTriad extends Application {
         }
     }
 
+    private void arrowFlip() {
+        if (arrowLeft.getRotate() == 0) {
+            arrowLeft.setRotate(180);
+            arrowRight.setRotate(180);
+        }
+        else {
+            arrowLeft.setRotate(0);
+            arrowRight.setRotate(0);
+        }
+    }
+
     private void updateGameBoard() {
         ObservableList<Node> boardChildren = board.getChildren();
         for (Node node : boardChildren) {
-            if (node instanceof ImageView) {
-                ImageView imageView = (ImageView) node;
+            if (node instanceof ImageView imageView) {
                 int col = GridPane.getRowIndex(node);
                 int row = GridPane.getColumnIndex(node);
 
@@ -178,28 +236,40 @@ public class TripleTriad extends Application {
     }
 
     private void gameOverCheck() {
-        int blue = 0;
-        int red = 0;
-        if (boardChecking()) {
-            for (int i = 0; i < 3; i++) {
-                for (int j = 0; j < 3; j++) {
-                    if (boardGrid[i][j].getFill() == playerColor) {
-                        blue++;
-                    }
-                    else {
-                        red++;
+        try {
+            int blue = 0;
+            int red = 0;
+            if (boardChecking()) {
+                for (int i = 0; i < 3; i++) {
+                    for (int j = 0; j < 3; j++) {
+                        if (boardGrid[i][j].getFill() == playerColor) {
+                            blue++;
+                        }
+                        else {
+                            red++;
+                        }
                     }
                 }
-            }
-            if (blue > red) {
-                System.out.println("You Win!");
-            }
-            else {
-                System.out.println("You Lose!");
-            }
+                victory = blue > red;
+                variableResets();
+                playScreenCreation();
+                socket.close();
 
-            primaryStage.setScene(menuScene);
+                endScreenCreation(primaryStage);
+                primaryStage.setScene(endScene);
+            }
+        } catch (Exception e) {
+            System.out.println("Error");
         }
+    }
+
+    private void variableResets() {
+        board = new GridPane();
+        boardGrid = new Rectangle[3][3];
+        boardStatus = new CardClass[3][3];
+        playState = true;
+        arrowLeft = new GridPane();
+        arrowRight = new GridPane();
     }
 
     private boolean boardChecking() {
@@ -214,12 +284,7 @@ public class TripleTriad extends Application {
     }
 
     private void swapCurrentPlayer() {
-        if (currentTurn) {
-            currentTurn = false;
-        }
-        else {
-            currentTurn = true;
-        }
+        currentTurn = !currentTurn;
     }
 
     private void getEnemyFiles(String filePath, int i) throws Exception {
@@ -330,6 +395,19 @@ public class TripleTriad extends Application {
     private void playScreenCreation() throws Exception {
         GridPane placeBoard = new GridPane();
 
+        ImageView currentArrowL = new ImageView(new Image("file:arrow.png"));
+        currentArrowL.setFitWidth(32);
+        currentArrowL.setFitHeight(32);
+
+        ImageView currentArrowR = new ImageView(new Image("file:arrow.png"));
+        currentArrowR.setFitWidth(32);
+        currentArrowR.setFitHeight(32);
+
+        arrowLeft.add(currentArrowL, 0, 0);
+        arrowRight.add(currentArrowR, 0, 0);
+        arrowLeft.setAlignment(Pos.CENTER);
+        arrowRight.setAlignment(Pos.CENTER);
+
         for (int i = 0; i < 5; i++) {
             deserialized(i, "hand/" + (i+1) + ".ser", playerCards);
         }
@@ -381,7 +459,9 @@ public class TripleTriad extends Application {
         board.setAlignment(Pos.CENTER);
         enemy.setAlignment(Pos.CENTER);
         player.setAlignment(Pos.CENTER);
-        VBox boardV = new VBox(25, enemy, stackPane, player);
+        HBox boardH = new HBox(50, arrowLeft, stackPane, arrowRight);
+        boardH.setAlignment(Pos.CENTER);
+        VBox boardV = new VBox(25, enemy, boardH, player);
         boardV.setAlignment(Pos.CENTER);
         gameScene = new Scene(boardV, 750, 750);
     }
@@ -417,7 +497,6 @@ public class TripleTriad extends Application {
             while ((c = fis.read()) != -1) {
                 fos.write(c);
             }
-            System.out.println("copied the file successfully");
         }
         finally {
             if (fis != null) {
@@ -460,10 +539,8 @@ public class TripleTriad extends Application {
             boardUpdate(x,y);
 
             try {
-                // Read file content into a byte array
                 CardClass[][] boardServerUpdate = boardStatus;
 
-                // Send the byte array to the server
                 objectOutputStream.writeObject(boardServerUpdate);
                 objectOutputStream.flush();
             } catch (Exception e) {

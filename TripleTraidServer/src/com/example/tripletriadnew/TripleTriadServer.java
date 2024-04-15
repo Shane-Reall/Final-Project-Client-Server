@@ -9,12 +9,13 @@ import java.util.Random;
 public class TripleTriadServer {
 
     private static final int PORT = 5555;
+    public static int clientCount = 0;
 
-    public static void main(String[] args) throws IOException {
-        int clientCount = 0;
+    public static void main(String[] args) throws Exception {
         ServerSocket serverSocket = new ServerSocket(PORT);
         System.out.println("Server Started. Waiting for clients...");
 
+        boolean clientCheck = false;
         Socket clientSocketOne = null;
         ObjectInputStream inputOne = null;
         ObjectOutputStream outputOne = null;
@@ -28,8 +29,7 @@ public class TripleTriadServer {
         Socket playerOneSocket = null;
         Socket playerTwoSocket = null;
 
-        while (clientCount < 2) {
-
+        while (true) {
             if (clientCount == 0) {
                 clientSocketOne = serverSocket.accept();
                 System.out.println("Client connected: " + clientSocketOne.getInetAddress());
@@ -41,7 +41,9 @@ public class TripleTriadServer {
                 playerOneOutput = outputOne;
                 playerOneSocket = clientSocketOne;
 
-            } else {
+                clientCount++;
+
+            } else if (clientCount == 1) {
                 clientSocketTwo = serverSocket.accept();
                 System.out.println("Client connected: " + clientSocketTwo.getInetAddress());
 
@@ -51,18 +53,34 @@ public class TripleTriadServer {
                 playerTwoInput = inputTwo;
                 playerTwoOutput = outputTwo;
                 playerTwoSocket = clientSocketTwo;
+
+                clientCount++;
+                clientCheck = true;
+            } else if (clientCheck) {
+                ClientHandler handlerOne = new ClientHandler(clientSocketOne, playerOneInput, playerOneOutput, playerTwoInput, playerTwoOutput, inputOne, outputOne, playerOneSocket, playerTwoSocket);
+                handlerOne.start();
+
+                ClientHandler handlerTwo = new ClientHandler(clientSocketTwo, playerOneInput, playerOneOutput, playerTwoInput, playerTwoOutput, inputTwo, outputTwo, playerOneSocket, playerTwoSocket);
+                handlerTwo.start();
+
+                System.out.println("Max Number of Clients Reached");
+                clientCheck = false;
+            } else if (clientCount >= 2) {
+                clientSocketOne = null;
+                inputOne = null;
+                outputOne = null;
+                playerOneInput = null;
+                playerOneOutput = null;
+                clientSocketTwo = null;
+                inputTwo = null;
+                outputTwo = null;
+                playerTwoInput = null;
+                playerTwoOutput = null;
+                playerOneSocket = null;
+                playerTwoSocket = null;
             }
-
-            clientCount++;
+            Thread.sleep(100);
         }
-
-        ClientHandler handlerOne = new ClientHandler(clientSocketOne, playerOneInput, playerOneOutput, playerTwoInput, playerTwoOutput, inputOne, outputOne, playerOneSocket, playerTwoSocket);
-        handlerOne.start();
-
-        ClientHandler handlerTwo = new ClientHandler(clientSocketTwo, playerOneInput, playerOneOutput, playerTwoInput, playerTwoOutput, inputTwo, outputTwo, playerOneSocket, playerTwoSocket);
-        handlerTwo.start();
-
-        System.out.println("Max Number of Clients Reached");
     }
 }
 
@@ -84,7 +102,7 @@ class ClientHandler extends Thread {
 
     public ClientHandler(Socket socket, ObjectInputStream playerOneInput, ObjectOutputStream playerOneOutput, ObjectInputStream playerTwoInput, ObjectOutputStream playerTwoOutput, ObjectInputStream input, ObjectOutputStream output, Socket playerOneSocket, Socket playerTwoSocket) {
         this.clientSocket = socket;
-        this.clientId = ++clientCount; // Assign a unique ID to each client
+        this.clientId = ++clientCount; //Assign a unique ID to each client
         this.fileCounter = 0;
 
         this.playerOneInput = playerOneInput;
@@ -151,17 +169,25 @@ class ClientHandler extends Thread {
                 }
             }
         } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-        } finally {
+            TripleTriadServer.clientCount--;
             try {
-                if (clientSocket != null) {
-                    System.out.println("Closing connection for Client " + clientId);
-                    clientSocket.close();
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
+                variableReset();
+                clientSocket.close();
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        } finally {
+            if (clientSocket != null) {
+                System.out.println("Closing connection for Client " + clientId);
             }
         }
+    }
+
+    private void variableReset() {
+        clientCount = 0;
+        clientId = 0;
+        fileCounter = 0;
+        boardStatus = new CardClass[3][3];
     }
 
     private void currentPlayer() {

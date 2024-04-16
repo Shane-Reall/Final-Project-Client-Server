@@ -1,9 +1,7 @@
 package com.example.tripletriadnew;
 
-import java.awt.*;
 import java.io.*;
 import java.net.*;
-import java.util.Arrays;
 import java.util.Random;
 
 public class TripleTriadServer {
@@ -15,6 +13,7 @@ public class TripleTriadServer {
         ServerSocket serverSocket = new ServerSocket(PORT);
         System.out.println("Server Started. Waiting for clients...");
 
+        //Variables
         boolean clientCheck = false;
         Socket clientSocketOne = null;
         ObjectInputStream inputOne = null;
@@ -29,7 +28,7 @@ public class TripleTriadServer {
         Socket playerOneSocket = null;
         Socket playerTwoSocket = null;
 
-        while (true) {
+        while (true) { //Loops through Threads to creates two connects and then use these connection. Once these connections disconnect it searches for new Clients
             if (clientCount == 0) {
                 clientSocketOne = serverSocket.accept();
                 System.out.println("Client connected: " + clientSocketOne.getInetAddress());
@@ -65,7 +64,7 @@ public class TripleTriadServer {
 
                 System.out.println("Max Number of Clients Reached");
                 clientCheck = false;
-            } else if (clientCount >= 2) {
+            } else if (clientCount >= 2) { //Resets All important needed Client Variables
                 clientSocketOne = null;
                 inputOne = null;
                 outputOne = null;
@@ -79,7 +78,7 @@ public class TripleTriadServer {
                 playerOneSocket = null;
                 playerTwoSocket = null;
             }
-            Thread.sleep(100);
+            Thread.sleep(100); //Easies up on continues quick looping of loop
         }
     }
 }
@@ -119,10 +118,10 @@ class ClientHandler extends Thread {
     @Override
     public void run() {
         try {
-            while (true) {
+            while (true) { //Continues check for inputs
                 Object received = input.readObject();
 
-                if (received instanceof String && received.equals("Ready")) {
+                if (received instanceof String && received.equals("Ready")) { //Responds to the Clients all Connects are ready
                     if (clientId == 1) {
 
                         playerOneOutput.writeObject("Ready");
@@ -132,7 +131,7 @@ class ClientHandler extends Thread {
                         playerTwoOutput.flush();
                     }
                 }
-                else if (received instanceof byte[]) {
+                else if (received instanceof byte[]) { //Checks for incoming .ser files
                     FileOutputStream fileOutputStream;
                     byte[] receivedBytes = (byte[]) received;
                     String fileName = (++fileCounter) + ".ser";
@@ -144,7 +143,7 @@ class ClientHandler extends Thread {
                     }
                     fileOutputStream.write(receivedBytes);
                     fileOutputStream.close();
-                } else if (received instanceof CardClass[][]) {
+                } else if (received instanceof CardClass[][]) { //Checks for incoming boardArrays
                     Object[][] receivedArray = (Object[][]) received;
                     boardStatus = (CardClass[][]) receivedArray;
 
@@ -161,14 +160,14 @@ class ClientHandler extends Thread {
                         playerTwoOutput.writeObject(false);
                         playerTwoOutput.flush();
                     }
-                } else if (received instanceof String && received.equals("Flip") && clientId == 2) {
+                } else if (received instanceof String && received.equals("Flip") && clientId == 2) { //Checks to see if boards needs to be exchanged
                     synchronized (ClientHandler.class) {
                         sendFilesBack(playerOneSocket, playerTwoSocket);
                         currentPlayer();
                     }
                 }
             }
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (IOException | ClassNotFoundException e) { //Closes Clients when They disconnect
             TripleTriadServer.clientCount--;
             try {
                 variableReset();
@@ -183,7 +182,7 @@ class ClientHandler extends Thread {
         }
     }
 
-    private void variableReset() {
+    private void variableReset() { //Resets Variables Important for Client Reset
         clientCount = 0;
         clientId = 0;
         fileCounter = 0;
@@ -191,7 +190,7 @@ class ClientHandler extends Thread {
     }
 
     private void currentPlayer() {
-        synchronized (lock) {
+        synchronized (lock) { //Syncs the Threads to decide on who PlayerOne is
             Random rand = new Random();
             int coinFlip = rand.nextInt(0,2);
 
@@ -217,7 +216,7 @@ class ClientHandler extends Thread {
     private void sendFilesBack(Socket playerOneSocket, Socket playerTwoSocket) {
         try {
 
-            // Sending files from PlayerTwo to PlayerOne
+            // Sending files from PlayerOne to PlayerTwo
             for (int i = 1; i <= 5; i++) {
                 String fileName = "PlayerOne/" + i + ".ser";
                 FileInputStream fileInputStream = new FileInputStream(fileName);
@@ -232,7 +231,7 @@ class ClientHandler extends Thread {
                 fileInputStream.close();
             }
 
-            // Sending files from PlayerOne to PlayerTwo
+            // Sending files from PlayerTwo to PlayerOne
             for (int i = 1; i <= 5; i++) {
                 String fileName = "PlayerTwo/" + i + ".ser";
                 FileInputStream fileInputStream = new FileInputStream(fileName);
@@ -251,7 +250,7 @@ class ClientHandler extends Thread {
         }
     }
 
-    private boolean boardChecking() {
+    private boolean boardChecking() { //Checks for end Game Condition
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
                 if (boardStatus[i][j] == null) {

@@ -24,6 +24,7 @@ import java.net.Socket;
 
 public class TripleTriad extends Application {
 
+    Image icon = new Image("file:icon.png");
     Stage primaryStage;
     Socket socket;
     CardClass[] playerCards = new CardClass[5];
@@ -55,14 +56,28 @@ public class TripleTriad extends Application {
     public void start(Stage primaryStage) throws Exception {
         this.primaryStage = primaryStage;
 
+        //Scene Setups
+        menuScreenCreation(primaryStage);
+        playScreenCreation();
+        cardScreenCreation(primaryStage);
+        loadingSceneCreation();
+
+        //primaryStage Setup
+        primaryStage.getIcons().add(icon);
+        primaryStage.setTitle("Triple Triad");
+        primaryStage.setScene(menuScene);
+        primaryStage.show();
+    }
+
+    private void menuScreenCreation(Stage primaryStage) {
         VBox menuLayout = new VBox(20);
         menuLayout.setAlignment(Pos.CENTER);
         Button startButton = new Button("Start Game");
         startButton.setOnAction(e -> {
             primaryStage.setScene(loadingScene);
-            Platform.runLater(() -> {
+            Platform.runLater(() -> { //Needed to have a thread run anything to do with JavaFX
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(100); //Allows menuScene to switch over to loadingScene
                 } catch (InterruptedException ex) {
                     throw new RuntimeException(ex);
                 }
@@ -77,14 +92,6 @@ public class TripleTriad extends Application {
         menuLayout.getChildren().add(cardButton);
         menuLayout.getChildren().add(exitButton);
         menuScene = new Scene(menuLayout, 300, 200);
-
-        playScreenCreation();
-        cardScreenCreation(primaryStage);
-        loadingSceneCreation();
-
-        primaryStage.setTitle("Triple Triad");
-        primaryStage.setScene(menuScene);
-        primaryStage.show();
     }
 
     private void loadingSceneCreation() {
@@ -117,215 +124,6 @@ public class TripleTriad extends Application {
         layout.getChildren().add(winLose);
         layout.getChildren().add(menuButton);
         endScene = new Scene(layout, 300, 200);
-    }
-
-    private void serverSetup() {
-        try {
-
-            //String serverIpAddressOrHostname = "xxx.xxx.x.xxx"; //Setup for connections through internet
-
-            socket = new Socket("localhost", 5555);
-            //socket = new Socket(serverIpAddressOrHostname, 5555); //Setup for connections through internet
-            objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-            objectInputStream = new ObjectInputStream(socket.getInputStream());
-            objectOutputStream.writeObject("Ready");
-            objectOutputStream.flush();
-
-            String serverResponse = (String) objectInputStream.readObject();
-            while (!serverResponse.equals("Ready")) {
-                serverResponse = (String) objectInputStream.readObject();
-                Thread.sleep(5000);
-            }
-            for (int i = 1; i <= 5; i++) {
-                File file = new File("hand/" + i + ".ser");
-
-                if (file.exists()) {
-                    byte[] fileBytes = readFileToBytes(file);
-
-                    objectOutputStream.writeObject(fileBytes);
-                    objectOutputStream.flush();
-                } else {
-                    System.out.println("File not found: " + file.getName());
-                    System.exit(1205);
-                }
-            }
-
-            objectOutputStream.writeObject("Flip");
-            objectOutputStream.flush();
-
-            getEnemyFiles("enemy/" + 1 + ".ser", 1);
-
-            Object received = objectInputStream.readObject();
-
-            currentTurn = (Boolean) received;
-
-            if (currentTurn) {
-                arrowFlip();
-            }
-
-            primaryStage.setScene(gameScene);
-
-            gameThread = new Thread(() -> {
-                try {
-                    while (playState) {
-                        Object receive = objectInputStream.readObject();
-
-                        if (receive instanceof CardClass[][]) {
-                            boardStatus = (CardClass[][]) receive;
-
-                            arrowFlip();
-
-                            Platform.runLater(this::updateGameBoard);
-                        } else if (receive instanceof Boolean) {
-                            break;
-                        }
-                    }
-                } catch (Exception e) {
-                    System.exit(1205);
-                }
-            });
-            gameThread.start();
-
-
-
-        } catch (Exception ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
-    private void arrowFlip() {
-        if (arrowLeft.getRotate() == 0) {
-            arrowLeft.setRotate(180);
-            arrowRight.setRotate(180);
-        }
-        else {
-            arrowLeft.setRotate(0);
-            arrowRight.setRotate(0);
-        }
-    }
-
-    private void updateGameBoard() {
-        ObservableList<Node> boardChildren = board.getChildren();
-        for (Node node : boardChildren) {
-            if (node instanceof ImageView imageView) {
-                int col = GridPane.getRowIndex(node);
-                int row = GridPane.getColumnIndex(node);
-
-                if (row >= 0 && row < 3 && col >= 0 && col < 3) {
-                    CardClass card = boardStatus[row][col];
-
-                    if (card != null) {
-                        Image cardImage = new Image(card.getImage());
-                        imageView.setImage(cardImage);
-                    } else {
-                        imageView.setImage(new ImageView("file:WhiteSpace.png").getImage());
-                    }
-                }
-            }
-        }
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                if (boardGrid[i][j].getFill() == Color.WHITE && boardStatus[i][j] != null) {
-                    boardGrid[i][j].setFill(enemyColor);
-                    boardUpdate(i, j);
-                }
-            }
-        }
-        swapCurrentPlayer();
-        gameOverCheck();
-    }
-
-    private void gameOverCheck() {
-        try {
-            int blue = 0;
-            int red = 0;
-            if (boardChecking()) {
-                for (int i = 0; i < 3; i++) {
-                    for (int j = 0; j < 3; j++) {
-                        if (boardGrid[i][j].getFill() == playerColor) {
-                            blue++;
-                        }
-                        else {
-                            red++;
-                        }
-                    }
-                }
-                victory = blue > red;
-                variableResets();
-                playScreenCreation();
-                socket.close();
-
-                endScreenCreation(primaryStage);
-                primaryStage.setScene(endScene);
-            }
-        } catch (Exception e) {
-            System.out.println("Error");
-        }
-    }
-
-    private void variableResets() {
-        board = new GridPane();
-        boardGrid = new Rectangle[3][3];
-        boardStatus = new CardClass[3][3];
-        playState = true;
-        arrowLeft = new GridPane();
-        arrowRight = new GridPane();
-    }
-
-    private boolean boardChecking() {
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                if (boardStatus[i][j] == null) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    private void swapCurrentPlayer() {
-        currentTurn = !currentTurn;
-    }
-
-    private void getEnemyFiles(String filePath, int i) throws Exception {
-        folderEmpty();
-        byte[] fileBytes = new byte[1024];
-        InputStream inputStream = socket.getInputStream();
-        FileOutputStream fileOutputStream;
-
-        int bytesRead;
-        while ((bytesRead = inputStream.read(fileBytes)) != -1) {
-            fileOutputStream = new FileOutputStream(filePath);
-            fileOutputStream.write(fileBytes, 0, bytesRead);
-            fileOutputStream.close();
-            deserialized(i-1, filePath, enemyCards);
-            i++;
-            filePath = "enemy/" + i + ".ser";
-            if (i >= 6) {
-                break;
-            }
-        }
-    }
-
-    private void folderEmpty() {
-        File folder = new File("enemy/");
-        File[] files = folder.listFiles();
-
-        if (files != null) {
-            for (File file : files) {
-                if (file.isFile()) {
-                    boolean deleted = file.delete();
-                }
-            }
-        }
-    }
-
-    private static byte[] readFileToBytes(File file) throws IOException {
-        FileInputStream fileInputStream = new FileInputStream(file);
-        byte[] fileBytes = new byte[(int) file.length()];
-        fileInputStream.read(fileBytes);
-        fileInputStream.close();
-        return fileBytes;
     }
 
     private void cardScreenCreation(Stage primaryStage) throws Exception {
@@ -412,7 +210,7 @@ public class TripleTriad extends Application {
             deserialized(i, "hand/" + (i+1) + ".ser", playerCards);
         }
 
-        for (int row = 0; row < 3; row++) {
+        for (int row = 0; row < 3; row++) { //Board Creation
             for (int col = 0; col < 3; col++) {
                 Rectangle rectangle = new Rectangle(150, 150, Color.WHITE);
                 rectangle.setStroke(Color.BLACK);
@@ -422,7 +220,7 @@ public class TripleTriad extends Application {
             }
         }
 
-        for (int row = 0; row < 3; row++) {
+        for (int row = 0; row < 3; row++) { //Clickable Board Creation
             for (int col = 0; col < 3; col++) {
                 ImageView imageView = new ImageView("file:WhiteSpace.png");
                 int finalCol = col;
@@ -434,7 +232,7 @@ public class TripleTriad extends Application {
             }
         }
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 5; i++) { //Enemy Hand Visual Creation
             Image card = new Image("file:card.png");
             ImageView tile = new ImageView(card);
             tile.setFitHeight(75);
@@ -442,7 +240,7 @@ public class TripleTriad extends Application {
             enemy.add(tile, i, 0);
         }
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 5; i++) { //Player Hand Creation
             Image card = new Image(playerCards[i].getImage());
             ImageView tile = new ImageView(card);
             tile.setFitHeight(75);
@@ -466,7 +264,90 @@ public class TripleTriad extends Application {
         gameScene = new Scene(boardV, 750, 750);
     }
 
-    private void updateHand(ListView<String> list) throws Exception {
+    private void serverSetup() {
+        try {
+
+            socket = new Socket("localhost", 5555);
+            objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+            objectInputStream = new ObjectInputStream(socket.getInputStream());
+            objectOutputStream.writeObject("Ready");
+            objectOutputStream.flush();
+
+            String serverResponse = (String) objectInputStream.readObject();
+            while (!serverResponse.equals("Ready")) { //Waits for a "Ready" response from the server, to tell the client it's ready for requests.
+                serverResponse = (String) objectInputStream.readObject();
+                Thread.sleep(5000); //Needed since it syncs up the input of the Client with the Server's output
+            }
+            for (int i = 1; i <= 5; i++) { //Sends the current hand to the server to be processed
+                File file = new File("hand/" + i + ".ser");
+
+                if (file.exists()) {
+                    byte[] fileBytes = readFileToBytes(file);
+
+                    objectOutputStream.writeObject(fileBytes);
+                    objectOutputStream.flush();
+                } else {
+                    System.out.println("File not found: " + file.getName());
+                    System.exit(1205);
+                }
+            }
+
+            objectOutputStream.writeObject("Flip"); //Sent to the Server to tell it the client is finished sending files
+            objectOutputStream.flush();
+
+            getEnemyFiles("enemy/" + 1 + ".ser", 1); //Gets the enemy cards
+
+            Object received = objectInputStream.readObject(); //Receives up if the user is PlayerOne or not
+
+            currentTurn = (Boolean) received; //Sets the value for currentTurn
+
+            if (currentTurn) {
+                arrowFlip(); //Flips the current arrow position
+            }
+
+            primaryStage.setScene(gameScene);
+
+            gameThread = new Thread(() -> { //Creates a new thread to continuously check for any incoming info
+                try {
+                    while (playState) {
+                        Object receive = objectInputStream.readObject();
+
+                        if (receive instanceof CardClass[][]) { //Checks for new Board State
+                            boardStatus = (CardClass[][]) receive;
+
+                            arrowFlip();
+
+                            Platform.runLater(this::updateGameBoard);
+                        } else if (receive instanceof Boolean) { //Checks for endGame
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    System.exit(1205);
+                }
+            });
+            gameThread.start();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private boolean boardChecking() { //Checks the board for endGame condition
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                if (boardStatus[i][j] == null) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private void swapCurrentPlayer() {
+        currentTurn = !currentTurn;
+    }
+
+    private void updateHand(ListView<String> list) throws Exception { //Updates the current Player Hand
         File from = new File("Serialize");
 
         for (int i = 0; i < 5; i++) {
@@ -485,82 +366,38 @@ public class TripleTriad extends Application {
         playScreenCreation();
     }
 
-    private void copyFiles(String file, int num) throws Exception {
-        num += 1;
-        FileInputStream fis = null;
-        FileOutputStream fos = null;
-        try {
-            fis = new FileInputStream("Serialize/" + file);
-            fos = new FileOutputStream("hand/" + num + ".ser");
-            int c;
+    private void updateGameBoard() { //Updates the visual GameBoard when any input is received from the Server
+        ObservableList<Node> boardChildren = board.getChildren();
+        for (Node node : boardChildren) {
+            if (node instanceof ImageView imageView) {
+                int col = GridPane.getRowIndex(node);
+                int row = GridPane.getColumnIndex(node);
 
-            while ((c = fis.read()) != -1) {
-                fos.write(c);
+                if (row >= 0 && row < 3 && col >= 0 && col < 3) {
+                    CardClass card = boardStatus[row][col];
+
+                    if (card != null) {
+                        Image cardImage = new Image(card.getImage());
+                        imageView.setImage(cardImage);
+                    } else {
+                        imageView.setImage(new ImageView("file:WhiteSpace.png").getImage());
+                    }
+                }
             }
         }
-        finally {
-            if (fis != null) {
-                fis.close();
-            }
-            if (fos != null) {
-                fos.close();
-            }
-        }
-    }
-
-    private void handClick(ImageView tile, int i) {
-
-        if (selectedTile != null) {
-            selectedTile.setFitWidth(75);
-            selectedTile.setFitHeight(75);
-        }
-
-        if (tile == selectedTile){
-            tile.setFitWidth(75);
-            tile.setFitHeight(75);
-            selectedTile = null;
-            selectedCard = null;
-        } else {
-            tile.setFitHeight(100);
-            tile.setFitWidth(100);
-            selectedTile = tile;
-            selectedCard = playerCards[i];
-        }
-    }
-
-    private void boardClick(ImageView imageView, int x, int y) {
-        if (selectedTile != null && boardStatus[x][y] == null && currentTurn) {
-            imageView.setImage(selectedTile.getImage());
-            player.getChildren().remove(selectedTile);
-            boardGrid[x][y].setFill(playerColor);
-            boardStatus[x][y] = selectedCard;
-            selectedTile = null;
-            selectedCard = null;
-            boardUpdate(x,y);
-
-            try {
-                CardClass[][] boardServerUpdate = boardStatus;
-
-                objectOutputStream.writeObject(boardServerUpdate);
-                objectOutputStream.flush();
-            } catch (Exception e) {
-                System.out.println(e);
-                System.exit(1205);
+        for (int i = 0; i < 3; i++) { //Setups the correct colors of the board
+            for (int j = 0; j < 3; j++) {
+                if (boardGrid[i][j].getFill() == Color.WHITE && boardStatus[i][j] != null) {
+                    boardGrid[i][j].setFill(enemyColor);
+                    boardUpdate(i, j);
+                }
             }
         }
+        swapCurrentPlayer();
+        gameOverCheck();
     }
 
-    private void deserialized(int i, String filePath, CardClass[] array) throws Exception {
-        FileInputStream fis = new FileInputStream(filePath);
-        ObjectInputStream ois = new ObjectInputStream(fis);
-        CardClass deserialized = (CardClass) ois.readObject();
-        ois.close();
-        fis.close();
-
-        array[i] = deserialized;
-    }
-
-    private void boardUpdate(int x, int y) {
+    private void boardUpdate(int x, int y) { //Updates the visual GameBoard when any input is received from the User in the Client
 
         CardClass[] checkingLocations = new CardClass[4];
 
@@ -613,6 +450,170 @@ public class TripleTriad extends Application {
         if (checkingLocations[3] != null && checkingLocations[3].getLeft() < boardStatus[x][y].getRight()) {
             boardGrid[x+1][y].setFill(boardGrid[x][y].getFill());
         }
+    }
+
+    private void handClick(ImageView tile, int i) { //Changes size of the clicked on card in the Player Hand
+
+        if (selectedTile != null) {
+            selectedTile.setFitWidth(75);
+            selectedTile.setFitHeight(75);
+        }
+
+        if (tile == selectedTile){
+            tile.setFitWidth(75);
+            tile.setFitHeight(75);
+            selectedTile = null;
+            selectedCard = null;
+        } else {
+            tile.setFitHeight(100);
+            tile.setFitWidth(100);
+            selectedTile = tile;
+            selectedCard = playerCards[i];
+        }
+    }
+
+    private void boardClick(ImageView imageView, int x, int y) { //Checks to see if a card can be placed on a selected Board Tile
+        if (selectedTile != null && boardStatus[x][y] == null && currentTurn) {
+            imageView.setImage(selectedTile.getImage());
+            player.getChildren().remove(selectedTile);
+            boardGrid[x][y].setFill(playerColor);
+            boardStatus[x][y] = selectedCard;
+            selectedTile = null;
+            selectedCard = null;
+            boardUpdate(x,y);
+
+            try {
+                CardClass[][] boardServerUpdate = boardStatus;
+
+                objectOutputStream.writeObject(boardServerUpdate);
+                objectOutputStream.flush();
+            } catch (Exception e) {
+                System.out.println(e);
+                System.exit(1205);
+            }
+        }
+    }
+
+    private void deserialized(int i, String filePath, CardClass[] array) throws Exception {
+        FileInputStream fis = new FileInputStream(filePath);
+        ObjectInputStream ois = new ObjectInputStream(fis);
+        CardClass deserialized = (CardClass) ois.readObject();
+        ois.close();
+        fis.close();
+
+        array[i] = deserialized;
+    }
+
+    private void arrowFlip() { //Flips the current direction of the arrows
+        if (arrowLeft.getRotate() == 0) {
+            arrowLeft.setRotate(180);
+            arrowRight.setRotate(180);
+        }
+        else {
+            arrowLeft.setRotate(0);
+            arrowRight.setRotate(0);
+        }
+    }
+
+    private void gameOverCheck() { //Checks for Winning conditions
+        try {
+            int blue = 0;
+            int red = 0;
+            if (boardChecking()) {
+                for (int i = 0; i < 3; i++) {
+                    for (int j = 0; j < 3; j++) {
+                        if (boardGrid[i][j].getFill() == playerColor) {
+                            blue++;
+                        }
+                        else {
+                            red++;
+                        }
+                    }
+                }
+                victory = blue > red;
+                variableResets();
+                playScreenCreation();
+                socket.close();
+
+                endScreenCreation(primaryStage);
+                primaryStage.setScene(endScene);
+            }
+        } catch (Exception e) {
+            System.out.println("Error");
+        }
+    }
+
+    private void variableResets() { //Resets all important variables for when the Clients reset for another game
+        board = new GridPane();
+        boardGrid = new Rectangle[3][3];
+        boardStatus = new CardClass[3][3];
+        playState = true;
+        arrowLeft = new GridPane();
+        arrowRight = new GridPane();
+    }
+
+    private void copyFiles(String file, int num) throws Exception { //Copying of Files from Serialized Folder to Hand Folder
+        num += 1;
+        FileInputStream fis = null;
+        FileOutputStream fos = null;
+        try {
+            fis = new FileInputStream("Serialize/" + file);
+            fos = new FileOutputStream("hand/" + num + ".ser");
+            int c;
+
+            while ((c = fis.read()) != -1) {
+                fos.write(c);
+            }
+        }
+        finally {
+            if (fis != null) {
+                fis.close();
+            }
+            if (fos != null) {
+                fos.close();
+            }
+        }
+    }
+
+    private void getEnemyFiles(String filePath, int i) throws Exception { //Receives enemy files and loads them into the enemy folder
+        folderEmpty();
+        byte[] fileBytes = new byte[1024];
+        InputStream inputStream = socket.getInputStream();
+        FileOutputStream fileOutputStream;
+
+        int bytesRead;
+        while ((bytesRead = inputStream.read(fileBytes)) != -1) {
+            fileOutputStream = new FileOutputStream(filePath);
+            fileOutputStream.write(fileBytes, 0, bytesRead);
+            fileOutputStream.close();
+            deserialized(i-1, filePath, enemyCards);
+            i++;
+            filePath = "enemy/" + i + ".ser";
+            if (i >= 6) {
+                break;
+            }
+        }
+    }
+
+    private void folderEmpty() { //Empties the enemy folder before loading in new enemy Files
+        File folder = new File("enemy/");
+        File[] files = folder.listFiles();
+
+        if (files != null) {
+            for (File file : files) {
+                if (file.isFile()) {
+                    boolean deleted = file.delete();
+                }
+            }
+        }
+    }
+
+    private static byte[] readFileToBytes(File file) throws IOException { //Reads Bytes into Files
+        FileInputStream fileInputStream = new FileInputStream(file);
+        byte[] fileBytes = new byte[(int) file.length()];
+        fileInputStream.read(fileBytes);
+        fileInputStream.close();
+        return fileBytes;
     }
 
     public static void main(String[] args) {

@@ -46,6 +46,7 @@ public class TripleTriad extends Application {
     Scene menuScene;
     Scene gameScene;
     Scene cardScene;
+    Scene creditScene;
     Scene endScene;
     Scene loadingScene;
     Boolean playState = true;
@@ -61,12 +62,41 @@ public class TripleTriad extends Application {
         playScreenCreation();
         cardScreenCreation(primaryStage);
         loadingSceneCreation();
+        creditSceneCreation();
 
         //primaryStage Setup
         primaryStage.getIcons().add(icon);
         primaryStage.setTitle("Triple Triad");
         primaryStage.setScene(menuScene);
         primaryStage.show();
+    }
+
+    private void creditSceneCreation() {
+        TextArea credits = new TextArea();
+
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader("credits.txt"));
+            StringBuilder content = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                content.append(line).append("\n");
+            }
+            reader.close();
+            credits.setText(content.toString());
+        } catch (Exception e) {
+            System.exit(1205);
+        }
+
+        credits.setEditable(false);
+        credits.setWrapText(true);
+
+        Button exitButton = new Button("Exit");
+        exitButton.setOnAction(e -> primaryStage.setScene(menuScene));
+
+        VBox vbox = new VBox(credits, exitButton);
+        vbox.setAlignment(Pos.CENTER);
+
+        creditScene = new Scene(vbox, 800, 300);
     }
 
     private void menuScreenCreation(Stage primaryStage) {
@@ -86,10 +116,13 @@ public class TripleTriad extends Application {
         });
         Button cardButton = new Button("Cards");
         cardButton.setOnAction(e -> primaryStage.setScene(cardScene));
+        Button creditButton = new Button("Credits");
+        creditButton.setOnAction(e -> primaryStage.setScene(creditScene));
         Button exitButton = new Button("Exit Game");
         exitButton.setOnAction(e -> primaryStage.close());
         menuLayout.getChildren().add(startButton);
         menuLayout.getChildren().add(cardButton);
+        menuLayout.getChildren().add(creditButton);
         menuLayout.getChildren().add(exitButton);
         menuScene = new Scene(menuLayout, 300, 200);
     }
